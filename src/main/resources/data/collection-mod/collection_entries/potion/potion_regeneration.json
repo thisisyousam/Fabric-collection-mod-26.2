@@ -1,0 +1,5 @@
+{
+  "order": 61,
+  "item": "minecraft:potion[minecraft:potion_contents=regeneration]",
+  "required": 10
+}

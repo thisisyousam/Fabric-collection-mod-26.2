@@ -1,0 +1,19 @@
+{
+	"required": true,
+	"package": "com.yousam.collection.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"InventoryScreenMixin",
+		"PlayerRendererMixin"
+	],
+	"mixins": [
+		"EntityDisplayNameMixin",
+		"ServerPlayerNicknameMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

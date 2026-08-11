@@ -1,0 +1,5 @@
+{
+  "order": 52,
+  "item": "minecraft:potion[minecraft:potion_contents=invisibility]",
+  "required": 10
+}

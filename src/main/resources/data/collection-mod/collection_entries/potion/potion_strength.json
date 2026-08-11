@@ -1,0 +1,5 @@
+{
+  "order": 62,
+  "item": "minecraft:potion[minecraft:potion_contents=strength]",
+  "required": 10
+}

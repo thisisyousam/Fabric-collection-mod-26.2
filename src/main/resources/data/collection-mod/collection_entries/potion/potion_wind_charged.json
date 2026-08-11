@@ -1,0 +1,5 @@
+{
+  "order": 65,
+  "item": "minecraft:potion[minecraft:potion_contents=wind_charged]",
+  "required": 10
+}

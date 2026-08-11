@@ -1,0 +1,5 @@
+{
+  "order": 56,
+  "item": "minecraft:potion[minecraft:potion_contents=slowness]",
+  "required": 10
+}
