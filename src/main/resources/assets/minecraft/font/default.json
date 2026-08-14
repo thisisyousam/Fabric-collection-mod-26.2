@@ -1,0 +1,26 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "minecraft:wantedsans.ttf",
+      "size": 7.0,
+      "oversample": 8.0,
+      "shift": [0.0, -1]
+    },
+    {
+      "type": "reference",
+      "id": "minecraft:include/space"
+    },
+    {
+      "type": "reference",
+      "id": "minecraft:include/default",
+      "filter": {
+        "uniform": false
+      }
+    },
+    {
+      "type": "reference",
+      "id": "minecraft:include/unifont"
+    }
+  ]
+}

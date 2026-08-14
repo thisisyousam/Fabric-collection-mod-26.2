@@ -6,6 +6,7 @@ import com.yousam.collection.network.EntrySyncPayload;
 import com.yousam.collection.network.LeaderboardSyncPayload;
 import com.yousam.collection.network.RequestLeaderboardPayload;
 import com.yousam.collection.network.SubmitItemPayload;
+import com.yousam.collection.network.UsePassTicketPayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -18,7 +19,6 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 import java.util.List;
 
@@ -38,14 +38,31 @@ public class CollectionScreen extends Screen {
     private static final int GRID_TOP_Y = 50;
 
     private static final float ITEM_ICON_SCALE = 1.2f;
-    private static final float COUNT_TEXT_SCALE = 0.8f;
-    private static final float TAB_ICON_SCALE = 0.8f;
+    private static final float COUNT_TEXT_SCALE = 1f;
     private static final float TAB_LABEL_SCALE = 0.7f;
+    // 탭 텍스트 위치 미세조정 (왼쪽/오른쪽 탭 각각 따로 조절 가능)
+    private static final float LEFT_TAB_LABEL_OFFSET_X = 0;
+    private static final float LEFT_TAB_LABEL_OFFSET_Y = 0;
+    private static final float RIGHT_TAB_LABEL_OFFSET_X = 0.5f;
+    private static final float RIGHT_TAB_LABEL_OFFSET_Y = 0;
+
+    // shop 모드의 도감 패스권 아이템 ID. 두 모드는 gradle 의존성이 없으므로
+    // 클래스가 아닌 레지스트리 ID 문자열로만 느슨하게 연결한다.
+    private static final Identifier PASS_TICKET_ITEM_ID =
+            Identifier.fromNamespaceAndPath("shop", "collection_pass_ticket");
 
     private static final Identifier COMPLETE_MARK_TEXTURE =
             Identifier.fromNamespaceAndPath(CollectionMod.MOD_ID, "textures/gui/complete_mark.png");
     private static final Identifier BACKGROUND_TEXTURE =
             Identifier.fromNamespaceAndPath(CollectionMod.MOD_ID, "textures/gui/collection_background.png");
+    // 탭이 선택됐을 때 덧그리는 활성 인덱스 이미지 (index1~index11.png, 탭 배치 순서와 동일)
+    private static final Identifier[] ACTIVE_TAB_TEXTURES = new Identifier[11];
+    static {
+        for (int i = 0; i < ACTIVE_TAB_TEXTURES.length; i++) {
+            ACTIVE_TAB_TEXTURES[i] = Identifier.fromNamespaceAndPath(
+                    CollectionMod.MOD_ID, "textures/gui/index" + (i + 1) + ".png");
+        }
+    }
 
     // 배경 이미지의 색깔 인덱스 탭 좌표 (원본 이미지 기준 상대좌표)
     private static final int TAB_WIDTH = 34;
@@ -55,12 +72,12 @@ public class CollectionScreen extends Screen {
     private static final int[] LEFT_TAB_Y = {34, 65, 96, 127, 158, 189};
     private static final int[] RIGHT_TAB_Y = {34, 65, 96, 127, 158};
     private static final CollectionCategory[] LEFT_TAB_CATEGORIES = {
-            CollectionCategory.ANIMAL, CollectionCategory.DISK, CollectionCategory.MINERALS,
-            CollectionCategory.MONSTER, CollectionCategory.NETHER_ENDER, CollectionCategory.POTION
+        CollectionCategory.OVERWORLD, CollectionCategory.TREE, CollectionCategory.PLANT,
+            CollectionCategory.ANIMAL, CollectionCategory.MONSTER, CollectionCategory.MINERALS
     };
     private static final CollectionCategory[] RIGHT_TAB_CATEGORIES = {
-            CollectionCategory.OCEAN, CollectionCategory.PLANT, CollectionCategory.TREE,
-            CollectionCategory.RARE, CollectionCategory.OVERWORLD
+        CollectionCategory.RARE, CollectionCategory.DISK, CollectionCategory.NETHER_ENDER,
+            CollectionCategory.POTION, CollectionCategory.OCEAN
     };
 
     // 기여도 버튼 자리 (배경 이미지 좌상단 노란 태그 부분, 원본 이미지 기준)
@@ -117,23 +134,6 @@ public class CollectionScreen extends Screen {
             case RARE -> "희귀";
 
         };
-    }
-
-    private ItemStack categoryIcon(CollectionCategory category) {
-        Item item = switch (category) {
-            case ANIMAL -> Items.LEATHER;
-            case DISK -> Items.MUSIC_DISC_CAT;
-            case POTION -> Items.BREWING_STAND;
-            case MINERALS -> Items.DIAMOND;
-            case MONSTER -> Items.ROTTEN_FLESH;
-            case NETHER_ENDER -> Items.NETHER_STAR;
-            case OCEAN -> Items.PRISMARINE_SHARD;
-            case PLANT -> Items.WHEAT_SEEDS;
-            case RARE -> Items.NETHERITE_SCRAP;
-            case TREE -> Items.OAK_SAPLING;
-            case OVERWORLD -> Items.GRASS_BLOCK;
-        };
-        return new ItemStack(item);
     }
 
     private List<EntrySyncPayload.EntryData> filteredEntries() {
@@ -196,29 +196,35 @@ public class CollectionScreen extends Screen {
 
     private void renderTabs(GuiGraphicsExtractor graphics) {
         for (int i = 0; i < LEFT_TAB_Y.length; i++) {
-            renderTab(graphics, LEFT_TAB_X, LEFT_TAB_Y[i], LEFT_TAB_CATEGORIES[i]);
+            renderTab(graphics, LEFT_TAB_X, LEFT_TAB_Y[i], LEFT_TAB_CATEGORIES[i], i,
+                    LEFT_TAB_LABEL_OFFSET_X, LEFT_TAB_LABEL_OFFSET_Y);
         }
         for (int i = 0; i < RIGHT_TAB_Y.length; i++) {
-            renderTab(graphics, RIGHT_TAB_X, RIGHT_TAB_Y[i], RIGHT_TAB_CATEGORIES[i]);
+            renderTab(graphics, RIGHT_TAB_X, RIGHT_TAB_Y[i], RIGHT_TAB_CATEGORIES[i], LEFT_TAB_Y.length + i,
+                    RIGHT_TAB_LABEL_OFFSET_X, RIGHT_TAB_LABEL_OFFSET_Y);
         }
     }
 
-    private void renderTab(GuiGraphicsExtractor graphics, int x, int y, CollectionCategory category) {
-        int centerX = x + TAB_WIDTH / 2;
+    private void renderTab(GuiGraphicsExtractor graphics, float x, float y, CollectionCategory category, int activeTextureIndex,
+                            float labelOffsetX, float labelOffsetY) {
+        if (category == selectedCategory) {
+            graphics.blit(ACTIVE_TAB_TEXTURES[activeTextureIndex],
+                    0, 0, PAGE_WIDTH, PAGE_HEIGHT,
+                    0f, 1f, 0f, 1f);
+        }
 
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(centerX, y + 9);
-        graphics.pose().scale(TAB_ICON_SCALE, TAB_ICON_SCALE);
-        graphics.item(categoryIcon(category), -8, -8);
-        graphics.pose().popMatrix();
+        float centerX = x + TAB_WIDTH / 2;
 
-        String label = categoryLabel(category);
+        Style boldFontStyle = Style.EMPTY.withFont(
+                new FontDescription.Resource(Identifier.withDefaultNamespace("wantedsans_bold"))
+        );
+        Component label = Component.literal(categoryLabel(category)).setStyle(boldFontStyle);
         int textWidth = this.font.width(label);
 
         graphics.pose().pushMatrix();
-        graphics.pose().translate(centerX, y + 17);
+        graphics.pose().translate(centerX + labelOffsetX, y + TAB_HEIGHT / 2 + 5 + labelOffsetY);
         graphics.pose().scale(TAB_LABEL_SCALE, TAB_LABEL_SCALE);
-        graphics.text(this.font, label, -textWidth / 2, 0, 0xFF000000, false);
+        graphics.text(this.font, label, -textWidth / 2 + 1, 0, 0xFF000000, false);
         graphics.pose().popMatrix();
     }
 
@@ -262,15 +268,16 @@ public class CollectionScreen extends Screen {
         graphics.pose().popMatrix();
 
         if (complete) {
-            graphics.fill(x + 2, y + 2, x + CELL_SIZE - 2, y + CELL_SIZE - 2, 0xB0808080);
             graphics.blit(COMPLETE_MARK_TEXTURE, x + 2, y + 2, x + CELL_SIZE - 2, y + CELL_SIZE - 2, 0f, 1f, 0f, 1f);
         } else {
             int submitted = ClientCollectionCache.getSubmitted(entry.id());
 
+
             Style boldFontStyle = Style.EMPTY.withFont(
-                    new FontDescription.Resource(Identifier.withDefaultNamespace("mona_bold"))
+                    new FontDescription.Resource(Identifier.withDefaultNamespace("wantedsans_bold"))
             );
-            Component styledText = Component.literal(String.valueOf(entry.required() - submitted)).setStyle(boldFontStyle);
+            Component styledText = Component.literal(String.valueOf(entry.required() - submitted))
+                    .setStyle(boldFontStyle);
 
             int textWidth = this.font.width(styledText);
 
@@ -279,7 +286,7 @@ public class CollectionScreen extends Screen {
             graphics.pose().pushMatrix();
             graphics.pose().translate(textCenterX, textY);
             graphics.pose().scale(COUNT_TEXT_SCALE, COUNT_TEXT_SCALE);
-            graphics.text(this.font, styledText, 5, 0, 0xFFFFFFFF, true);
+            graphics.text(this.font, styledText, 6, -2, 0xFFFFFFFF, true);
             graphics.pose().popMatrix();
         }
 
@@ -346,13 +353,32 @@ public class CollectionScreen extends Screen {
 
             if (designMouseX >= x && designMouseX < x + CELL_SIZE && designMouseY >= y && designMouseY < y + CELL_SIZE) {
                 if (!ClientCollectionCache.isComplete(entry)) {
-                    ClientPlayNetworking.send(new SubmitItemPayload(entry.id()));
+                    if (isHoldingPassTicket()) {
+                        ClientPlayNetworking.send(new UsePassTicketPayload(entry.id()));
+                    } else {
+                        ClientPlayNetworking.send(new SubmitItemPayload(entry.id()));
+                    }
                 }
                 return true;
             }
         }
 
         return false;
+    }
+
+    private boolean isHoldingPassTicket() {
+        var player = net.minecraft.client.Minecraft.getInstance().player;
+        if (player == null) {
+            return false;
+        }
+        return matchesPassTicket(player.getMainHandItem()) || matchesPassTicket(player.getOffhandItem());
+    }
+
+    private boolean matchesPassTicket(ItemStack stack) {
+        if (stack.isEmpty()) {
+            return false;
+        }
+        return PASS_TICKET_ITEM_ID.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()));
     }
 
     @Override

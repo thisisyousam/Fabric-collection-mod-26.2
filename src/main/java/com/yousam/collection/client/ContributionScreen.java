@@ -15,9 +15,14 @@ import java.util.List;
 public class ContributionScreen extends Screen {
 
     private static final int PANEL_PADDING = 65;
-    private static final int ROW_HEIGHT = 14;
+    private static final int ROW_HEIGHT = 9;
     private static final int HEADER_HEIGHT = 50;
     private static final int MAX_RANKS = 10;
+
+    private static final int BACK_BUTTON_SIZE = 16;
+    private static final int BACK_BUTTON_MARGIN = 8;
+
+    private static final float ROW_TEXT_SCALE = 0.7f;
 
     private static final Identifier PANEL_TEXTURE =
             Identifier.fromNamespaceAndPath(CollectionMod.MOD_ID, "textures/gui/contribution_panel.png");
@@ -39,7 +44,12 @@ public class ContributionScreen extends Screen {
         panelX = this.width / 2 - panelWidth / 2;
         panelY = this.height / 2 - panelHeight / 2;
 
-
+        this.addRenderableWidget(new BackButton(
+                panelX + BACK_BUTTON_MARGIN + 185, panelY + BACK_BUTTON_MARGIN + 175,
+                BACK_BUTTON_SIZE, BACK_BUTTON_SIZE,
+                Component.literal("뒤로가기"),
+                button -> this.minecraft.gui.setScreen(parent)
+        ));
     }
 
     @Override
@@ -56,7 +66,7 @@ public class ContributionScreen extends Screen {
             if (rank > MAX_RANKS) {
                 break;
             }
-            renderRow(graphics, rank, entry, panelX + PANEL_PADDING, y, panelWidth - PANEL_PADDING * 2);
+            renderRow(graphics, rank, entry, panelX + PANEL_PADDING - 5, y + 7, panelWidth - PANEL_PADDING * 2);
             y += ROW_HEIGHT;
             rank++;
         }
@@ -65,15 +75,28 @@ public class ContributionScreen extends Screen {
     }
 
     private void renderRow(GuiGraphicsExtractor graphics, int rank, LeaderboardSyncPayload.PlayerContribution entry, int x, int y, int width) {
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(x, y);
+        graphics.pose().scale(ROW_TEXT_SCALE, ROW_TEXT_SCALE);
+
+        Style boldFontStyle = Style.EMPTY.withFont(
+                new FontDescription.Resource(Identifier.withDefaultNamespace("wantedsans_bold"))
+        );
+
         String rankText = rank + "위";
-        graphics.text(this.font, rankText, x, y, 0xFF000000, false);
+
+        Component styledText = Component.literal(String.valueOf(rankText))
+                .setStyle(boldFontStyle);
+        graphics.text(this.font, styledText, 0, 0, 0xFF000000, false);
 
         String nameText = entry.playerName();
-        graphics.text(this.font, nameText, x + 30, y, 0xFF000000, false);
+        graphics.text(this.font, nameText, 55, 0, 0xFF000000, false);
 
         String countText = entry.total() + "개";
         int countWidth = this.font.width(countText);
-        graphics.text(this.font, countText, x + width - countWidth, y, 0xFF000000, false);
+        graphics.text(this.font, countText, width - countWidth + 35, 0, 0xFF000000, false);
+
+        graphics.pose().popMatrix();
     }
 
     @Override

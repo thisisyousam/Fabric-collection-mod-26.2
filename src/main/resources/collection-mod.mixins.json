@@ -3,6 +3,7 @@
 	"package": "com.yousam.collection.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"FontBoldMixin",
 		"InventoryScreenMixin",
 		"PlayerRendererMixin"
 	],

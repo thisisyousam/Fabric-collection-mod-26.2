@@ -32,8 +32,8 @@ public class ContributionButton extends AbstractButton {
         Identifier texture = this.isHoveredOrFocused() ? TEXTURE_HOVER : TEXTURE_NORMAL;
 
         graphics.blit(texture,
-                this.getX(), this.getY(),
-                this.getX() + this.getWidth(), this.getY() + this.getHeight(),
+                this.getX() + 3, this.getY() + 2,
+                this.getX() + this.getWidth() + 3, this.getY() + this.getHeight() + 2,
                 0f, 1f, 0f, 1f);
     }
 
