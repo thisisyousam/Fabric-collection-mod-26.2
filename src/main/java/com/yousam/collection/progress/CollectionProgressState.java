@@ -20,6 +20,9 @@ public class CollectionProgressState extends SavedData {
     // playerUUID -> (entryId -> 그 플레이어가 제출한 개수) - 기여도 집계용
     private final Map<String, Map<String, Integer>> playerContributions;
 
+    // 마지막으로 1위 변경 알림을 보낸 시점의 1등 UUID. null이면 아직 한 번도 기록된 적 없음(서버 최초 기동 등)
+    private UUID currentFirstPlace;
+
     private static final Codec<Map<String, Integer>> INT_MAP_CODEC =
             Codec.unboundedMap(Codec.STRING, Codec.INT).xmap(HashMap::new, map -> map);
 
@@ -28,19 +31,24 @@ public class CollectionProgressState extends SavedData {
 
     private static final Codec<CollectionProgressState> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             INT_MAP_CODEC.fieldOf("globalProgress").forGetter(state -> state.globalProgress),
-            CONTRIBUTION_MAP_CODEC.fieldOf("playerContributions").forGetter(state -> state.playerContributions)
-    ).apply(instance, CollectionProgressState::new));
+            CONTRIBUTION_MAP_CODEC.fieldOf("playerContributions").forGetter(state -> state.playerContributions),
+            Codec.STRING.optionalFieldOf("currentFirstPlace").forGetter(state ->
+                    java.util.Optional.ofNullable(state.currentFirstPlace).map(UUID::toString))
+    ).apply(instance, (globalProgress, playerContributions, currentFirstPlace) -> new CollectionProgressState(
+            globalProgress, playerContributions, currentFirstPlace.map(UUID::fromString).orElse(null)
+    )));
 
     public static final SavedDataType<CollectionProgressState> TYPE = new SavedDataType<>(
             Identifier.fromNamespaceAndPath(CollectionMod.MOD_ID, "collection_progress"),
-            () -> new CollectionProgressState(new HashMap<>(), new HashMap<>()),
+            () -> new CollectionProgressState(new HashMap<>(), new HashMap<>(), null),
             CODEC,
             null
     );
 
-    private CollectionProgressState(Map<String, Integer> globalProgress, Map<String, Map<String, Integer>> playerContributions) {
+    private CollectionProgressState(Map<String, Integer> globalProgress, Map<String, Map<String, Integer>> playerContributions, UUID currentFirstPlace) {
         this.globalProgress = globalProgress;
         this.playerContributions = playerContributions;
+        this.currentFirstPlace = currentFirstPlace;
     }
 
     // 전체 공유 진행도 조회 (플레이어 무관)
@@ -72,9 +80,19 @@ public class CollectionProgressState extends SavedData {
         return totals;
     }
 
+    public UUID getCurrentFirstPlace() {
+        return currentFirstPlace;
+    }
+
+    public void setCurrentFirstPlace(UUID playerId) {
+        this.currentFirstPlace = playerId;
+        setDirty();
+    }
+
     public void resetAll() {
         globalProgress.clear();
         playerContributions.clear();
+        currentFirstPlace = null;
         setDirty();
     }
 }

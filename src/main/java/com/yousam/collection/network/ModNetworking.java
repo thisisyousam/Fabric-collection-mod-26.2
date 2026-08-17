@@ -11,16 +11,25 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.projectile.FireworkRocketEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.FireworkExplosion;
+import net.minecraft.world.item.component.Fireworks;
+import it.unimi.dsi.fastutil.ints.IntList;
 
 import net.minecraft.core.component.DataComponents;
 
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ModNetworking {
@@ -138,6 +147,8 @@ public class ModNetworking {
                 entry.requiredCount()
         );
 
+        checkFirstPlaceChange(player, progress);
+
         // 공유 상태이므로 이 항목을 볼 수 있는 모든 플레이어에게 갱신된 진행도 전송
         broadcastProgressSync(player.level());
     }
@@ -174,6 +185,8 @@ public class ModNetworking {
                 "{}님이 도감 패스권으로 {} 항목을 즉시 완료 ({}개 처리)",
                 player.getName().getString(), entryId, remaining
         );
+
+        checkFirstPlaceChange(player, progress);
 
         broadcastProgressSync(player.level());
     }
@@ -238,6 +251,98 @@ public class ModNetworking {
                 .toList();
 
         ServerPlayNetworking.send(player, new LeaderboardSyncPayload(contributions));
+    }
+
+    // 기여도 갱신 시마다 호출되어 1위가 실제로 바뀌었는지 확인하고, 바뀌었다면 서버 전체에 알린다.
+    // 동점으로 인한 순위 변동(기존 1위와 동점이 된 경우)은 트리거하지 않고, 순수하게 추월한 경우에만 트리거한다.
+    private static void checkFirstPlaceChange(ServerPlayer contributor, CollectionProgressState progress) {
+        java.util.Map<java.util.UUID, Integer> totals = progress.getAllTotals();
+        if (totals.isEmpty()) {
+            return;
+        }
+
+        java.util.UUID newLeader = null;
+        int newLeaderTotal = Integer.MIN_VALUE;
+        boolean tie = false;
+        for (var entry : totals.entrySet()) {
+            int total = entry.getValue();
+            if (total > newLeaderTotal) {
+                newLeaderTotal = total;
+                newLeader = entry.getKey();
+                tie = false;
+            } else if (total == newLeaderTotal) {
+                tie = true;
+            }
+        }
+
+        java.util.UUID previousFirstPlace = progress.getCurrentFirstPlace();
+
+        if (previousFirstPlace == null) {
+            // 서버 최초 기동(또는 이 필드가 없던 기존 세이브 최초 로드) - 스팸 방지를 위해 조용히 값만 세팅
+            progress.setCurrentFirstPlace(newLeader);
+            return;
+        }
+
+        if (tie || newLeader.equals(previousFirstPlace)) {
+            // 동점 상태이거나 1위가 그대로면 알릴 것이 없음
+            return;
+        }
+
+        String newLeaderName = resolveNickname(contributor, newLeader);
+
+        Component message = Component.literal(
+                "§e👑 " + newLeaderName + "§f님이 도감 순위 1위를 차지했습니다!"
+        );
+        for (ServerPlayer p : net.fabricmc.fabric.api.networking.v1.PlayerLookup.all(contributor.level().getServer())) {
+            p.sendSystemMessage(message);
+            playFirstPlaceNotifySound(p);
+        }
+
+        ServerPlayer newLeaderPlayer = contributor.level().getServer().getPlayerList().getPlayer(newLeader);
+        if (newLeaderPlayer != null) {
+            spawnOvertakeFirework(newLeaderPlayer);
+        }
+
+        progress.setCurrentFirstPlace(newLeader);
+    }
+
+    // 모든 접속자에게 위치와 무관하게 알림 효과음을 들려준다 (거리 기반 Level#playSound는 근처 플레이어만 들을 수 있어 부적합)
+    private static void playFirstPlaceNotifySound(ServerPlayer player) {
+        player.connection.send(new ClientboundSoundPacket(
+                Holder.direct(SoundEvents.FIREWORK_ROCKET_LARGE_BLAST),
+                SoundSource.MASTER,
+                player.getX(), player.getY(), player.getZ(),
+                1.0f, 1.0f,
+                player.level().getRandom().nextLong()
+        ));
+    }
+
+    // 역전에 성공한 플레이어 머리 위에서 폭죽을 즉시 터뜨려 축하 효과를 준다
+    private static void spawnOvertakeFirework(ServerPlayer player) {
+        ItemStack fireworkStack = new ItemStack(Items.FIREWORK_ROCKET);
+        fireworkStack.set(DataComponents.FIREWORKS, new Fireworks(
+                0,
+                List.of(new FireworkExplosion(
+                        FireworkExplosion.Shape.LARGE_BALL,
+                        IntList.of(0xFFD700, 0xFF5555),
+                        IntList.of(),
+                        true,
+                        true
+                ))
+        ));
+
+        FireworkRocketEntity firework = new FireworkRocketEntity(
+                player.level(), player.getX(), player.getY() + 1.0, player.getZ(), fireworkStack
+        );
+        player.level().addFreshEntity(firework);
+    }
+
+    private static String resolveNickname(ServerPlayer requester, java.util.UUID uuid) {
+        String nickname = CollectionProgressManager.getNicknameStorage(requester.level()).get(uuid);
+        if (nickname != null) {
+            return nickname;
+        }
+        return resolvePlayerName(requester, uuid);
     }
 
     private static String resolvePlayerName(ServerPlayer requester, java.util.UUID uuid) {

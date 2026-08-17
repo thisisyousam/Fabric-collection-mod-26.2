@@ -268,7 +268,7 @@ public class CollectionScreen extends Screen {
         graphics.pose().popMatrix();
 
         if (complete) {
-            graphics.blit(COMPLETE_MARK_TEXTURE, x + 2, y + 2, x + CELL_SIZE - 2, y + CELL_SIZE - 2, 0f, 1f, 0f, 1f);
+            graphics.blit(COMPLETE_MARK_TEXTURE, x + 5, y + 5, x + CELL_SIZE - 2, y + CELL_SIZE - 2, 0f, 1f, 0f, 1f);
         } else {
             int submitted = ClientCollectionCache.getSubmitted(entry.id());
 
